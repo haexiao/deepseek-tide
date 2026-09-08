@@ -134,6 +134,7 @@ function weekdayCn(day) {
 
 function TideChip() {
   const [now, setNow] = useState(() => new Date())
+  const [tierModel, setTierModel] = useState('flash') // 'flash' | 'pro' — 点击 chip 切换
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), TICK_MS)
@@ -141,13 +142,14 @@ function TideChip() {
   }, [])
 
   const { peak, nextIn, nextWindow, dayOffset, day } = tideAt(now)
-  const tier = PRICES.flash[peak ? 'peak' : 'offpeak']
+  const tier = PRICES[tierModel][peak ? 'peak' : 'offpeak']
   const icon = peak ? '⛰️' : '🌙'
   const countdown = `剩余${fmtCountdown(nextIn)}`
   const win = fmtWindow(nextWindow)
   const windowLabel =
     dayOffset === 0 ? win : dayOffset === 1 ? `明日${win}` : `周${weekdayCn((day + dayOffset) % 7)}${win}`
-  const label = `${icon} ${peak ? '高峰' : '空闲'} ${windowLabel} ${countdown} · 缓存${fmtYuan(tier.hit)} 输入${fmtYuan(tier.miss)} 输出${fmtYuan(tier.out)}`
+  const tierMark = tierModel === 'flash' ? 'F' : 'P'
+  const label = `${tierMark}${icon} ${peak ? '高峰' : '空闲'} ${windowLabel} ${countdown} · 缓存${fmtYuan(tier.hit)} 输入${fmtYuan(tier.miss)} 输出${fmtYuan(tier.out)}`
 
   const labelColor = peak ? 'text-(--ui-orange)' : 'text-(--ui-green)'
 
@@ -159,10 +161,9 @@ function TideChip() {
     '高峰窗口：周一至周五 9:00-12:00、14:00-18:00',
     '周末及节假日：全天空闲（半价）',
     '',
-    'Flash 价格（元 / 百万 tokens）',
+    `${tierModel === 'flash' ? 'Flash' : 'Pro'} 价格（元 / 百万 tokens）`,
     `  缓存命中输入 ${fmtYuan(tier.hit)} · 未命中输入 ${fmtYuan(tier.miss)} · 输出 ${fmtYuan(tier.out)}`,
-    'Pro（参考）',
-    `  缓存命中输入 ${fmtYuan(PRICES.pro[peak ? 'peak' : 'offpeak'].hit)} · 输出 ${fmtYuan(PRICES.pro[peak ? 'peak' : 'offpeak'].out)}`,
+    `点击切换：${tierModel === 'flash' ? 'Pro' : 'Flash'}`,
   ].join('\n')
 
   return jsx(Tip, {
@@ -174,9 +175,16 @@ function TideChip() {
         'hover:bg-(--chrome-action-hover) hover:text-foreground'
       ),
       type: 'button',
+      title: '点击切换 Flash / Pro 价格显示',
       onClick: () => {
         haptic('tap')
-        host.notify({ kind: 'info', message: detail })
+        const next = tierModel === 'flash' ? 'pro' : 'flash'
+        setTierModel(next)
+        const t = PRICES[next][peak ? 'peak' : 'offpeak']
+        host.notify({
+          kind: 'info',
+          message: `已切换到 ${next === 'flash' ? 'Flash' : 'Pro'} 价格 · ${peak ? '高峰' : '空闲'} 缓存¥${t.hit} 输入¥${t.miss} 输出¥${t.out}`,
+        })
       },
       children: label,
     }),
