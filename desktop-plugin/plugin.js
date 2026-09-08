@@ -1,0 +1,199 @@
+/**
+ * deepseek-tide — Hermes desktop status bar plugin
+ *
+ * Shows the DeepSeek V4 peak/off-peak pricing tide in the status bar:
+ *   ⛰️ peak / 🌙 off-peak + countdown to the next switch + current price
+ *
+ * Peak hours (Beijing time, Mon–Fri only): 09:00–12:00 and 14:00–18:00.
+ * Weekends are off-peak all day; off-peak = half price.
+ * Prices in CNY per 1M tokens (tiered billing since 2026-08-17).
+ *
+ * Pure local clock math — no API key, no network, no notifications.
+ *
+ * Install:
+ *   1. Copy this folder to ~/.hermes/desktop-plugins/deepseek-tide/
+ *   2. Status bar shows e.g. "⛰️ 高峰 9:00-12:00 剩余1:32:30 · 缓存¥0.1 输入¥3 输出¥9"
+ */
+
+import { cn, haptic, host, Tip } from '@hermes/plugin-sdk'
+import { jsx } from 'react/jsx-runtime'
+import { useEffect, useState } from 'react'
+
+/* ── Constants ──────────────────────────────────────────────────────── */
+
+// Beijing = UTC+8, no DST — compute directly on UTC fields.
+const BJ_OFFSET_MS = 8 * 3600 * 1000
+const TICK_MS = 1_000
+const DAY_SECS = 24 * 3600
+
+// Peak windows in minutes-of-day (Beijing time), [start, end) — workdays only.
+const PEAK_WINDOWS = [
+  [9 * 60, 12 * 60],
+  [14 * 60, 18 * 60],
+]
+
+// Tier prices, CNY per 1M tokens (effective 2026-08-17).
+const PRICES = {
+  flash: {
+    peak:    { hit: 0.10, miss: 3.0, out: 9.0 },
+    offpeak: { hit: 0.05, miss: 1.5, out: 4.5 },
+  },
+  pro: {
+    peak:    { hit: 0.30, miss: 9.0, out: 27.0 },
+    offpeak: { hit: 0.15, miss: 4.5, out: 13.5 },
+  },
+}
+
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+
+// Beijing time as { day (0=Sun..6), secs (seconds into the day) }.
+function beijingClock(now) {
+  const bj = new Date(now.getTime() + BJ_OFFSET_MS)
+  return {
+    day: bj.getUTCDay(),
+    secs: bj.getUTCHours() * 3600 + bj.getUTCMinutes() * 60 + bj.getUTCSeconds(),
+  }
+}
+
+// Days (>= n) until the next workday after weekday `day` (0=Sun..6).
+function workdayOffset(day, n) {
+  for (let d = n; d <= 7; d++) {
+    const wd = (day + d) % 7
+    if (wd >= 1 && wd <= 5) return d
+  }
+  return 7
+}
+
+// Returns { peak, nextIn, nextWindow, dayOffset }: nextIn (seconds) until the
+// next tier switch; nextWindow is the window the countdown points at (the
+// current peak window while peak, the upcoming one while off-peak);
+// dayOffset is 0=window today, 1=tomorrow, N=in N days.
+function tideAt(now) {
+  const { day, secs } = beijingClock(now)
+  const isWorkday = day >= 1 && day <= 5
+
+  // Inside a peak window? (peak hours exist on workdays only)
+  const cur = isWorkday
+    ? PEAK_WINDOWS.find(([s, e]) => secs >= s * 60 && secs < e * 60)
+    : undefined
+  const peak = Boolean(cur)
+
+  let nextStart // seconds since midnight of "today" (may exceed DAY_SECS)
+  let nextWindow
+  let dayOffset
+
+  if (peak) {
+    // End of whichever peak window we're inside (still today).
+    nextStart = cur[1] * 60
+    nextWindow = cur
+    dayOffset = 0
+  } else if (isWorkday && secs < PEAK_WINDOWS[0][0] * 60) {
+    // Workday before 09:00 → today's morning window.
+    nextStart = PEAK_WINDOWS[0][0] * 60
+    nextWindow = PEAK_WINDOWS[0]
+    dayOffset = 0
+  } else if (isWorkday && secs < PEAK_WINDOWS[1][0] * 60) {
+    // Workday lunch gap (12:00–14:00) → today's afternoon window.
+    nextStart = PEAK_WINDOWS[1][0] * 60
+    nextWindow = PEAK_WINDOWS[1]
+    dayOffset = 0
+  } else {
+    // After 18:00 on a workday, or any time on a weekend → next workday 09:00.
+    const off = workdayOffset(day, 1)
+    nextStart = DAY_SECS * off + PEAK_WINDOWS[0][0] * 60
+    nextWindow = PEAK_WINDOWS[0]
+    dayOffset = off
+  }
+
+  return { peak, nextIn: nextStart - secs, nextWindow, dayOffset, day }
+}
+
+function fmtCountdown(totalSec) {
+  const s = Math.max(0, Math.floor(totalSec))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+function fmtWindow([s, e]) {
+  const hh = (m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
+  return `${hh(s)}-${hh(e)}`
+}
+
+function fmtYuan(n) {
+  if (Number.isInteger(n)) return `¥${n}`
+  return `¥${n.toFixed(2).replace(/\.?0+$/, '')}`
+}
+
+function weekdayCn(day) {
+  return '日一二三四五六'[day]
+}
+
+/* ── Status Bar Chip ─────────────────────────────────────────────────── */
+
+function TideChip() {
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), TICK_MS)
+    return () => clearInterval(t)
+  }, [])
+
+  const { peak, nextIn, nextWindow, dayOffset, day } = tideAt(now)
+  const tier = PRICES.flash[peak ? 'peak' : 'offpeak']
+  const icon = peak ? '⛰️' : '🌙'
+  const countdown = `剩余${fmtCountdown(nextIn)}`
+  const win = fmtWindow(nextWindow)
+  const windowLabel =
+    dayOffset === 0 ? win : dayOffset === 1 ? `明日${win}` : `周${weekdayCn((day + dayOffset) % 7)}${win}`
+  const label = `${icon} ${peak ? '高峰' : '空闲'} ${windowLabel} ${countdown} · 缓存${fmtYuan(tier.hit)} 输入${fmtYuan(tier.miss)} 输出${fmtYuan(tier.out)}`
+
+  const labelColor = peak ? 'text-(--ui-orange)' : 'text-(--ui-green)'
+
+  const detail = [
+    'DeepSeek 峰谷计价 · 北京时间',
+    `${icon} 当前：${peak ? '高峰时段' : '空闲时段'}`,
+    `距下次切换：${fmtCountdown(nextIn)}`,
+    '',
+    '高峰窗口：周一至周五 9:00-12:00、14:00-18:00',
+    '周末及节假日：全天空闲（半价）',
+    '',
+    'Flash 价格（元 / 百万 tokens）',
+    `  缓存命中输入 ${fmtYuan(tier.hit)} · 未命中输入 ${fmtYuan(tier.miss)} · 输出 ${fmtYuan(tier.out)}`,
+    'Pro（参考）',
+    `  缓存命中输入 ${fmtYuan(PRICES.pro[peak ? 'peak' : 'offpeak'].hit)} · 输出 ${fmtYuan(PRICES.pro[peak ? 'peak' : 'offpeak'].out)}`,
+  ].join('\n')
+
+  return jsx(Tip, {
+    label: detail,
+    children: jsx('button', {
+      className: cn(
+        'inline-flex h-full cursor-pointer items-center px-0.5 text-[0.6875rem] transition-colors',
+        labelColor,
+        'hover:bg-(--chrome-action-hover) hover:text-foreground'
+      ),
+      type: 'button',
+      onClick: () => {
+        haptic('tap')
+        host.notify({ kind: 'info', message: detail })
+      },
+      children: label,
+    }),
+  })
+}
+
+/* ── Plugin Registration ─────────────────────────────────────────────── */
+
+export default {
+  id: 'deepseek-tide',
+  name: 'DeepSeek Peak/Off-peak Tide',
+  register(ctx) {
+    ctx.register({
+      id: 'ds-tide-chip',
+      area: 'statusBar.right',
+      order: 110,
+      render: () => jsx(TideChip, {}),
+    })
+  },
+}
