@@ -2,7 +2,7 @@
  * deepseek-tide — Hermes desktop status bar plugin
  *
  * Shows the DeepSeek peak/off-peak pricing tide in the status bar:
- *   peak / off-peak + countdown to the next switch + current per-1M-token prices
+ *   ⛰️ peak / 🌙 off-peak + countdown to the next switch + current per-1M-token prices
  * Click the chip to toggle between Flash and Pro prices (choice persisted).
  *
  * Peak hours (Beijing time, Mon–Fri only): 09:00–12:00 and 14:00–18:00.
@@ -17,7 +17,7 @@
  *
  * Install:
  *   1. Copy this folder to ~/.hermes/desktop-plugins/deepseek-tide/
- *   2. Status bar shows e.g. "F 高峰 9:00-12:00 剩余1:32:30 · 缓存¥0.04 输入¥2 输出¥8"
+ *   2. Status bar shows e.g. "F⛰️ 高峰 9:00-12:00 剩余1:32:30 · 缓存¥0.04 输入¥2 输出¥8"
  */
 
 import { cn, haptic, host, STATUSBAR_AREAS, Tip, usePluginI18n } from '@hermes/plugin-sdk'
