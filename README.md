@@ -11,7 +11,7 @@ Hermes 桌面插件 —— DeepSeek 峰谷计价潮汐指示器(状态栏实时�
 - **每秒刷新**倒计时,精确到秒
 - 颜色指示:高峰橙色 ⛰️ / 空闲绿色 🌙
 - **点击切换 Flash / Pro 价格**,标签前缀 `F` / `P` 标识当前档位,**选择会被记住**(重载插件、重启应用后保持)
-- **多语言** —— 界面文案提供中文 / English 两套,随应用语言自动切换
+- **多语言** —— 界面文案提供简体中文 / 繁體中文 / English / 日本語 四套,随应用语言自动切换
 - 悬停显示完整计价详情(北京时间、窗口规则、当前档位价格表)
 
 ## 峰谷规则
@@ -77,7 +77,7 @@ cp desktop-plugin/plugin.js ~/.hermes/desktop-plugins/deepseek-tide/
 |------|------|
 | 字体/颜色 | 全部使用主题变量(`--ui-orange`、`--ui-green`、`--chrome-action-hover`),随主题自动换肤 |
 | 区域注册 | `STATUSBAR_AREAS.right` 常量 |
-| 多语言 | `ctx.i18n.register({ en, zh })` + `usePluginI18n(id)` |
+| 多语言 | `ctx.i18n.register({ en, zh, 'zh-hant', ja })` + `usePluginI18n(id)`,`en` 为兜底层 |
 | 偏好持久化 | `ctx.storage`(键自动命名空间化为 `hermes.plugin.deepseek-tide.*`) |
 | 依赖 | 仅 `@hermes/plugin-sdk` 与 `react` |
 
@@ -92,4 +92,4 @@ cp desktop-plugin/plugin.js ~/.hermes/desktop-plugins/deepseek-tide/
 
 [MIT](./LICENSE) © 2026 haexiao
 
-当前版本:**v1.3.0**(2026-09-10)
+当前版本:**v1.4.0**(2026-09-10)

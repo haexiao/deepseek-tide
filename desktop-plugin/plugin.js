@@ -12,8 +12,8 @@
  *   Full price schedule: PRICE-HISTORY.md in the repo.
  *
  * Pure local clock math — no API key, no network, no polling.
- * Strings ship in this file (zh + en) via ctx.i18n; the app's active locale
- * picks the bundle, falling back to `en`.
+ * Strings ship in this file (en / zh / zh-hant / ja) via ctx.i18n; the app's
+ * active locale picks the bundle, falling back to `en`.
  *
  * Install:
  *   1. Copy this folder to ~/.hermes/desktop-plugins/deepseek-tide/
@@ -103,6 +103,52 @@ const MESSAGES = {
     detailSwitchTo: m => `点击切换：${m}`,
     switched: (m, state, hit, miss, out) =>
       `已切换到 ${m} 价格 · ${state} 缓存${hit} 输入${miss} 输出${out}`,
+  },
+  'zh-hant': {
+    peak: '高峰',
+    offpeak: '離峰',
+    peakHours: '高峰時段',
+    offpeakHours: '離峰時段',
+    countdown: s => `剩餘${s}`,
+    tomorrow: win => `明日${win}`,
+    weekdayWindow: (i, win) => `週${'日一二三四五六'[i]}${win}`,
+    priceLine: (hit, miss, out) => `快取${hit} 輸入${miss} 輸出${out}`,
+    tip: '點擊切換 Flash / Pro 價格顯示',
+    detailHeader: 'DeepSeek 峰谷計價 · 北京時間',
+    detailNow: state => `目前：${state}`,
+    detailNext: s => `距下次切換：${s}`,
+    detailPeakWindow: '高峰時段：週一至週五 9:00-12:00、14:00-18:00',
+    detailWeekend: '週末及假日：整日離峰（半價）',
+    detailPriceTitle: m => `${m} 價格（元 / 百萬 Token）`,
+    detailPriceRow: (hit, miss, out) => `  快取命中輸入 ${hit} · 快取未命中輸入 ${miss} · 輸出 ${out}`,
+    detailProNote: '註：2026-09-14 12:00 起 V4 Pro 路由至 V4.1 Flash，依 Flash 價格計費',
+    detailSwitchTo: m => `點擊切換：${m}`,
+    switched: (m, state, hit, miss, out) =>
+      `已切換至 ${m} 價格 · ${state} 快取${hit} 輸入${miss} 輸出${out}`,
+  },
+  ja: {
+    peak: 'ピーク',
+    offpeak: 'オフピーク',
+    peakHours: 'ピーク時間帯',
+    offpeakHours: 'オフピーク時間帯',
+    countdown: s => `残り${s}`,
+    tomorrow: win => `明日${win}`,
+    weekdayWindow: (i, win) => `${['日', '月', '火', '水', '木', '金', '土'][i]}曜 ${win}`,
+    priceLine: (hit, miss, out) => `キャッシュ${hit} 入力${miss} 出力${out}`,
+    tip: 'クリックで Flash / Pro の価格を切り替え',
+    detailHeader: 'DeepSeek ピーク / オフピーク価格 · 北京時間',
+    detailNow: state => `現在：${state}`,
+    detailNext: s => `次回切替まで：${s}`,
+    detailPeakWindow: 'ピーク時間帯：月〜金 9:00-12:00、14:00-18:00',
+    detailWeekend: '週末・祝日：終日オフピーク（半額）',
+    detailPriceTitle: m => `${m} 価格（元 / 100 万トークン）`,
+    detailPriceRow: (hit, miss, out) =>
+      `  キャッシュヒット入力 ${hit} · キャッシュミス入力 ${miss} · 出力 ${out}`,
+    detailProNote:
+      '注：2026-09-14 12:00 より V4 Pro は V4.1 Flash にルーティングされ、Flash の価格で課金されます',
+    detailSwitchTo: m => `クリックで切替：${m}`,
+    switched: (m, state, hit, miss, out) =>
+      `${m} の価格に切替 · ${state} キャッシュ${hit} 入力${miss} 出力${out}`,
   },
 }
 
