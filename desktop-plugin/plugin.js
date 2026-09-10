@@ -1,8 +1,9 @@
 /**
  * deepseek-tide — Hermes desktop status bar plugin
  *
- * Shows the DeepSeek V4 peak/off-peak pricing tide in the status bar:
- *   ⛰️ peak / 🌙 off-peak + countdown to the next switch + current price
+ * Shows the DeepSeek peak/off-peak pricing tide in the status bar:
+ *   peak / off-peak + countdown to the next switch + current per-1M-token prices
+ * Click the chip to toggle between Flash and Pro prices (choice persisted).
  *
  * Peak hours (Beijing time, Mon–Fri only): 09:00–12:00 and 14:00–18:00.
  * Weekends are off-peak all day; off-peak = half price.
@@ -10,16 +11,22 @@
  *   Tiered billing since 2026-08-17; flash re-priced 2026-09-10 12:00.
  *   Full price schedule: PRICE-HISTORY.md in the repo.
  *
- * Pure local clock math — no API key, no network, no notifications.
+ * Pure local clock math — no API key, no network, no polling.
+ * Strings ship in this file (zh + en) via ctx.i18n; the app's active locale
+ * picks the bundle, falling back to `en`.
  *
  * Install:
  *   1. Copy this folder to ~/.hermes/desktop-plugins/deepseek-tide/
- *   2. Status bar shows e.g. "F⛰️ 高峰 9:00-12:00 剩余1:32:30 · 缓存¥0.04 输入¥2 输出¥8"
+ *   2. Status bar shows e.g. "F 高峰 9:00-12:00 剩余1:32:30 · 缓存¥0.04 输入¥2 输出¥8"
  */
 
-import { cn, haptic, host, Tip } from '@hermes/plugin-sdk'
+import { cn, haptic, host, STATUSBAR_AREAS, Tip, usePluginI18n } from '@hermes/plugin-sdk'
 import { jsx } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
+
+const ID = 'deepseek-tide'
+/** ctx.storage key holding the Flash/Pro choice (namespaced by the host). */
+const TIER_KEY = 'tier'
 
 /* ── Constants ──────────────────────────────────────────────────────── */
 
@@ -50,6 +57,55 @@ const PRICES = {
   },
 }
 
+/* ── Messages (plugin-scoped i18n; `en` is the fallback bundle) ──────── */
+
+const MESSAGES = {
+  en: {
+    peak: 'peak',
+    offpeak: 'off-peak',
+    peakHours: 'peak hours',
+    offpeakHours: 'off-peak hours',
+    countdown: s => `${s} left`,
+    tomorrow: win => `tomorrow ${win}`,
+    weekdayWindow: (i, win) => `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i]} ${win}`,
+    priceLine: (hit, miss, out) => `cache ${hit} in ${miss} out ${out}`,
+    tip: 'Click to toggle Flash / Pro pricing',
+    detailHeader: 'DeepSeek peak/off-peak pricing · Beijing time',
+    detailNow: state => `Now: ${state}`,
+    detailNext: s => `Next switch in ${s}`,
+    detailPeakWindow: 'Peak windows: Mon–Fri 9:00-12:00, 14:00-18:00',
+    detailWeekend: 'Weekends & holidays: off-peak all day (half price)',
+    detailPriceTitle: m => `${m} price (CNY / 1M tokens)`,
+    detailPriceRow: (hit, miss, out) => `  cache hit ${hit} · cache miss ${miss} · output ${out}`,
+    detailProNote: 'Note: V4 Pro routes to V4.1 Flash (Flash pricing) from 2026-09-14 12:00',
+    detailSwitchTo: m => `Click to switch: ${m}`,
+    switched: (m, state, hit, miss, out) =>
+      `Switched to ${m} pricing · ${state} cache ${hit} in ${miss} out ${out}`,
+  },
+  zh: {
+    peak: '高峰',
+    offpeak: '空闲',
+    peakHours: '高峰时段',
+    offpeakHours: '空闲时段',
+    countdown: s => `剩余${s}`,
+    tomorrow: win => `明日${win}`,
+    weekdayWindow: (i, win) => `周${'日一二三四五六'[i]}${win}`,
+    priceLine: (hit, miss, out) => `缓存${hit} 输入${miss} 输出${out}`,
+    tip: '点击切换 Flash / Pro 价格显示',
+    detailHeader: 'DeepSeek 峰谷计价 · 北京时间',
+    detailNow: state => `当前：${state}`,
+    detailNext: s => `距下次切换：${s}`,
+    detailPeakWindow: '高峰窗口：周一至周五 9:00-12:00、14:00-18:00',
+    detailWeekend: '周末及节假日：全天空闲（半价）',
+    detailPriceTitle: m => `${m} 价格（元 / 百万 tokens）`,
+    detailPriceRow: (hit, miss, out) => `  缓存命中输入 ${hit} · 未命中输入 ${miss} · 输出 ${out}`,
+    detailProNote: '注：2026-09-14 12:00 起 V4 Pro 路由至 V4.1 Flash，按 Flash 价计费',
+    detailSwitchTo: m => `点击切换：${m}`,
+    switched: (m, state, hit, miss, out) =>
+      `已切换到 ${m} 价格 · ${state} 缓存${hit} 输入${miss} 输出${out}`,
+  },
+}
+
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
 // Beijing time as { day (0=Sun..6), secs (seconds into the day) }.
@@ -70,8 +126,8 @@ function workdayOffset(day, n) {
   return 7
 }
 
-// Returns { peak, nextIn, nextWindow, dayOffset }: nextIn (seconds) until the
-// next tier switch; nextWindow is the window the countdown points at (the
+// Returns { peak, nextIn, nextWindow, dayOffset, day }: nextIn (seconds) until
+// the next tier switch; nextWindow is the window the countdown points at (the
 // current peak window while peak, the upcoming one while off-peak);
 // dayOffset is 0=window today, 1=tomorrow, N=in N days.
 function tideAt(now) {
@@ -132,47 +188,53 @@ function fmtYuan(n) {
   return `¥${n.toFixed(2).replace(/\.?0+$/, '')}`
 }
 
-function weekdayCn(day) {
-  return '日一二三四五六'[day]
-}
-
 /* ── Status Bar Chip ─────────────────────────────────────────────────── */
 
+/** The host hands `ctx` to `register` only; keep it so handlers can reach
+ *  `ctx.storage` outside render (the VS Code globalState analog). */
+let pluginCtx = null
+
 function TideChip() {
+  const t = usePluginI18n(ID)
   const [now, setNow] = useState(() => new Date())
-  const [tierModel, setTierModel] = useState('flash') // 'flash' | 'pro' — 点击 chip 切换
+  // Restored from plugin storage so the choice survives reloads/restarts.
+  const [tierModel, setTierModel] = useState(() =>
+    pluginCtx?.storage.get(TIER_KEY, 'flash') === 'pro' ? 'pro' : 'flash'
+  )
 
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), TICK_MS)
-    return () => clearInterval(t)
+    const timer = setInterval(() => setNow(new Date()), TICK_MS)
+    return () => clearInterval(timer)
   }, [])
 
   const { peak, nextIn, nextWindow, dayOffset, day } = tideAt(now)
   const tier = PRICES[tierModel][peak ? 'peak' : 'offpeak']
   const icon = peak ? '⛰️' : '🌙'
-  const countdown = `剩余${fmtCountdown(nextIn)}`
+  const stateText = peak ? t('peak') : t('offpeak')
   const win = fmtWindow(nextWindow)
   const windowLabel =
-    dayOffset === 0 ? win : dayOffset === 1 ? `明日${win}` : `周${weekdayCn((day + dayOffset) % 7)}${win}`
+    dayOffset === 0
+      ? win
+      : dayOffset === 1
+        ? t('tomorrow', win)
+        : t('weekdayWindow', (day + dayOffset) % 7, win)
   const tierMark = tierModel === 'flash' ? 'F' : 'P'
-  const label = `${tierMark}${icon} ${peak ? '高峰' : '空闲'} ${windowLabel} ${countdown} · 缓存${fmtYuan(tier.hit)} 输入${fmtYuan(tier.miss)} 输出${fmtYuan(tier.out)}`
+  const label = `${tierMark}${icon} ${stateText} ${windowLabel} ${t('countdown', fmtCountdown(nextIn))} · ${t('priceLine', fmtYuan(tier.hit), fmtYuan(tier.miss), fmtYuan(tier.out))}`
 
   const labelColor = peak ? 'text-(--ui-orange)' : 'text-(--ui-green)'
 
   const detail = [
-    'DeepSeek 峰谷计价 · 北京时间',
-    `${icon} 当前：${peak ? '高峰时段' : '空闲时段'}`,
-    `距下次切换：${fmtCountdown(nextIn)}`,
+    t('detailHeader'),
+    `${icon} ${t('detailNow', peak ? t('peakHours') : t('offpeakHours'))}`,
+    t('detailNext', fmtCountdown(nextIn)),
     '',
-    '高峰窗口：周一至周五 9:00-12:00、14:00-18:00',
-    '周末及节假日：全天空闲（半价）',
+    t('detailPeakWindow'),
+    t('detailWeekend'),
     '',
-    `${tierModel === 'flash' ? 'Flash' : 'Pro'} 价格（元 / 百万 tokens）`,
-    `  缓存命中输入 ${fmtYuan(tier.hit)} · 未命中输入 ${fmtYuan(tier.miss)} · 输出 ${fmtYuan(tier.out)}`,
-    ...(tierModel === 'pro'
-      ? ['注：2026-09-14 12:00 起 V4 Pro 路由至 V4.1 Flash，按 Flash 价计费']
-      : []),
-    `点击切换：${tierModel === 'flash' ? 'Pro' : 'Flash'}`,
+    t('detailPriceTitle', tierModel === 'flash' ? 'Flash' : 'Pro'),
+    t('detailPriceRow', fmtYuan(tier.hit), fmtYuan(tier.miss), fmtYuan(tier.out)),
+    ...(tierModel === 'pro' ? [t('detailProNote')] : []),
+    t('detailSwitchTo', tierModel === 'flash' ? 'Pro' : 'Flash'),
   ].join('\n')
 
   return jsx(Tip, {
@@ -184,15 +246,23 @@ function TideChip() {
         'hover:bg-(--chrome-action-hover) hover:text-foreground'
       ),
       type: 'button',
-      title: '点击切换 Flash / Pro 价格显示',
+      title: t('tip'),
       onClick: () => {
         haptic('tap')
         const next = tierModel === 'flash' ? 'pro' : 'flash'
         setTierModel(next)
-        const t = PRICES[next][peak ? 'peak' : 'offpeak']
+        pluginCtx?.storage.set(TIER_KEY, next)
+        const nt = PRICES[next][peak ? 'peak' : 'offpeak']
         host.notify({
           kind: 'info',
-          message: `已切换到 ${next === 'flash' ? 'Flash' : 'Pro'} 价格 · ${peak ? '高峰' : '空闲'} 缓存¥${t.hit} 输入¥${t.miss} 输出¥${t.out}`,
+          message: t(
+            'switched',
+            next === 'flash' ? 'Flash' : 'Pro',
+            stateText,
+            fmtYuan(nt.hit),
+            fmtYuan(nt.miss),
+            fmtYuan(nt.out)
+          ),
         })
       },
       children: label,
@@ -203,12 +273,16 @@ function TideChip() {
 /* ── Plugin Registration ─────────────────────────────────────────────── */
 
 export default {
-  id: 'deepseek-tide',
+  id: ID, // must match the folder name
   name: 'DeepSeek Peak/Off-peak Tide',
+  description:
+    'Status bar tide for DeepSeek peak/off-peak pricing: current window, countdown to the next switch, and per-1M-token prices (Flash / Pro).',
   register(ctx) {
+    pluginCtx = ctx
+    ctx.i18n.register(MESSAGES)
     ctx.register({
-      id: 'ds-tide-chip',
-      area: 'statusBar.right',
+      id: 'chip',
+      area: STATUSBAR_AREAS.right,
       order: 110,
       render: () => jsx(TideChip, {}),
     })
