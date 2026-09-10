@@ -6,13 +6,15 @@
  *
  * Peak hours (Beijing time, Mon–Fri only): 09:00–12:00 and 14:00–18:00.
  * Weekends are off-peak all day; off-peak = half price.
- * Prices in CNY per 1M tokens (tiered billing since 2026-08-17).
+ * Prices in CNY per 1M tokens.
+ *   Tiered billing since 2026-08-17; flash re-priced 2026-09-10 12:00.
+ *   Full price schedule: PRICE-HISTORY.md in the repo.
  *
  * Pure local clock math — no API key, no network, no notifications.
  *
  * Install:
  *   1. Copy this folder to ~/.hermes/desktop-plugins/deepseek-tide/
- *   2. Status bar shows e.g. "⛰️ 高峰 9:00-12:00 剩余1:32:30 · 缓存¥0.1 输入¥3 输出¥9"
+ *   2. Status bar shows e.g. "F⛰️ 高峰 9:00-12:00 剩余1:32:30 · 缓存¥0.04 输入¥2 输出¥8"
  */
 
 import { cn, haptic, host, Tip } from '@hermes/plugin-sdk'
@@ -32,11 +34,15 @@ const PEAK_WINDOWS = [
   [14 * 60, 18 * 60],
 ]
 
-// Tier prices, CNY per 1M tokens (effective 2026-08-17).
+// Tier prices, CNY per 1M tokens.
+//   flash — re-priced 2026-09-10 12:00 (Beijing): off-peak ¥0.02 / ¥1 / ¥4,
+//           peak = 2× off-peak. Model name unchanged (deepseek-v4-flash).
+//   pro   — unchanged since 2026-08-17. Routed to V4.1 Flash (Flash pricing)
+//           from 2026-09-14 12:00 while V4 Pro is retired.
 const PRICES = {
   flash: {
-    peak:    { hit: 0.10, miss: 3.0, out: 9.0 },
-    offpeak: { hit: 0.05, miss: 1.5, out: 4.5 },
+    peak:    { hit: 0.04, miss: 2, out: 8 },
+    offpeak: { hit: 0.02, miss: 1, out: 4 },
   },
   pro: {
     peak:    { hit: 0.30, miss: 9.0, out: 27.0 },
@@ -163,6 +169,9 @@ function TideChip() {
     '',
     `${tierModel === 'flash' ? 'Flash' : 'Pro'} 价格（元 / 百万 tokens）`,
     `  缓存命中输入 ${fmtYuan(tier.hit)} · 未命中输入 ${fmtYuan(tier.miss)} · 输出 ${fmtYuan(tier.out)}`,
+    ...(tierModel === 'pro'
+      ? ['注：2026-09-14 12:00 起 V4 Pro 路由至 V4.1 Flash，按 Flash 价计费']
+      : []),
     `点击切换：${tierModel === 'flash' ? 'Pro' : 'Flash'}`,
   ].join('\n')
 
