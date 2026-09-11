@@ -41,7 +41,7 @@ DeepSeek 自 **2026-08-17** 起实行峰谷分档计价(北京时间):
 | 输入(缓存未命中) | ¥4.5 | ¥9.0 |
 | 输出 | ¥13.5 | ¥27.0 |
 
-> ⏳ **2026-09-14 12:00 起 V4 Pro 下线**:届时访问 `deepseek-v4-pro` 的请求将路由至 V4.1 Flash,并按 V4.1 Flash 价格计费。
+> ✅ **V4 Pro 继续提供服务** —— 官方已于 2026-09-10 取消原定的下线计划,`deepseek-v4-pro` 的计费方式保持不变。
 
 📜 DeepSeek API 的**完整调价史**见 **[PRICE-HISTORY.md](./PRICE-HISTORY.md)**(2024-04 首次公开定价至今);版本变更见 **[CHANGELOG.md](./CHANGELOG.md)**。
 

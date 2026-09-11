@@ -77,7 +77,6 @@ const MESSAGES = {
     detailWeekend: 'Weekends & holidays: off-peak all day (half price)',
     detailPriceTitle: m => `${m} price (CNY / 1M tokens)`,
     detailPriceRow: (hit, miss, out) => `  cache hit ${hit} · cache miss ${miss} · output ${out}`,
-    detailProNote: 'Note: V4 Pro routes to V4.1 Flash (Flash pricing) from 2026-09-14 12:00',
     detailSwitchTo: m => `Click to switch: ${m}`,
     switched: (m, state, hit, miss, out) =>
       `Switched to ${m} pricing · ${state} cache ${hit} in ${miss} out ${out}`,
@@ -99,7 +98,6 @@ const MESSAGES = {
     detailWeekend: '周末及节假日：全天空闲（半价）',
     detailPriceTitle: m => `${m} 价格（元 / 百万 tokens）`,
     detailPriceRow: (hit, miss, out) => `  缓存命中输入 ${hit} · 未命中输入 ${miss} · 输出 ${out}`,
-    detailProNote: '注：2026-09-14 12:00 起 V4 Pro 路由至 V4.1 Flash，按 Flash 价计费',
     detailSwitchTo: m => `点击切换：${m}`,
     switched: (m, state, hit, miss, out) =>
       `已切换到 ${m} 价格 · ${state} 缓存${hit} 输入${miss} 输出${out}`,
@@ -121,7 +119,6 @@ const MESSAGES = {
     detailWeekend: '週末及假日：整日離峰（半價）',
     detailPriceTitle: m => `${m} 價格（元 / 百萬 Token）`,
     detailPriceRow: (hit, miss, out) => `  快取命中輸入 ${hit} · 快取未命中輸入 ${miss} · 輸出 ${out}`,
-    detailProNote: '註：2026-09-14 12:00 起 V4 Pro 路由至 V4.1 Flash，依 Flash 價格計費',
     detailSwitchTo: m => `點擊切換：${m}`,
     switched: (m, state, hit, miss, out) =>
       `已切換至 ${m} 價格 · ${state} 快取${hit} 輸入${miss} 輸出${out}`,
@@ -144,8 +141,6 @@ const MESSAGES = {
     detailPriceTitle: m => `${m} 価格（元 / 100 万トークン）`,
     detailPriceRow: (hit, miss, out) =>
       `  キャッシュヒット入力 ${hit} · キャッシュミス入力 ${miss} · 出力 ${out}`,
-    detailProNote:
-      '注：2026-09-14 12:00 より V4 Pro は V4.1 Flash にルーティングされ、Flash の価格で課金されます',
     detailSwitchTo: m => `クリックで切替：${m}`,
     switched: (m, state, hit, miss, out) =>
       `${m} の価格に切替 · ${state} キャッシュ${hit} 入力${miss} 出力${out}`,
@@ -279,7 +274,6 @@ function TideChip() {
     '',
     t('detailPriceTitle', tierModel === 'flash' ? 'Flash' : 'Pro'),
     t('detailPriceRow', fmtYuan(tier.hit), fmtYuan(tier.miss), fmtYuan(tier.out)),
-    ...(tierModel === 'pro' ? [t('detailProNote')] : []),
     t('detailSwitchTo', tierModel === 'flash' ? 'Pro' : 'Flash'),
   ].join('\n')
 
