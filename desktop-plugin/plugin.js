@@ -43,28 +43,31 @@ const PEAK_WINDOWS = [
 
 // China's statutory holidays (Beijing dates) — off-peak all day even when they
 // fall on a weekday. 调休上班的周末 (make-up workdays) stay off-peak: DeepSeek's
-// rule counts Mon–Fri only.
-// 2026 list per 国办发明电〔2025〕7号 (国务院办公厅, 2025-11-04); years not listed
-// here fall back to the plain weekend-only rule — add the next year's list when
-// the State Council publishes it.
+// rule counts Mon–Fri only; years not listed fall back to the plain weekend-only
+// rule.
+// DATA LIVES IN holidays.json (source of record: 国务院办公厅 holiday notices).
+// A desktop plugin must be ONE self-contained file, so the list is inlined
+// below — add a year to holidays.json and run `node desktop-plugin/build.mjs`.
+/* holiday-data:start (generated from holidays.json by build.mjs — do not edit) */
 const HOLIDAYS = new Set([
-  // 元旦 1/1–1/3
+  // 2026 元旦 1/1–1/3
   '2026-01-01', '2026-01-02', '2026-01-03',
-  // 春节 2/15–2/23
+  // 2026 春节 2/15–2/23
   '2026-02-15', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19',
   '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
-  // 清明节 4/4–4/6
+  // 2026 清明节 4/4–4/6
   '2026-04-04', '2026-04-05', '2026-04-06',
-  // 劳动节 5/1–5/5
+  // 2026 劳动节 5/1–5/5
   '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05',
-  // 端午节 6/19–6/21
+  // 2026 端午节 6/19–6/21
   '2026-06-19', '2026-06-20', '2026-06-21',
-  // 中秋节 9/25–9/27
+  // 2026 中秋节 9/25–9/27
   '2026-09-25', '2026-09-26', '2026-09-27',
-  // 国庆节 10/1–10/7
+  // 2026 国庆节 10/1–10/7
   '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05',
   '2026-10-06', '2026-10-07',
 ])
+/* holiday-data:end */
 
 // Tier prices, CNY per 1M tokens.
 //   flash — DeepSeek-V4.1-Flash, recommended model name `deepseek-flash`

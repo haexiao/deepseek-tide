@@ -2,6 +2,16 @@
 
 本文件记录 `deepseek-tide` 的所有重要变更。
 
+## [1.5.0] - 2026-09-20
+
+### 变更
+
+- **节假日数据拆分为独立文件**:新增 `desktop-plugin/holidays.json`(节日区间 + 依据)与 `desktop-plugin/build.mjs`(生成器),便于以后逐年补充
+  - 桌面插件必须是**单个自包含文件** —— 应用只读取 `plugin.js` 并用 blob URL 求值,相对的 `import './holidays.json'` 无法解析 —— 因此数据仍内联在 `plugin.js` 里,位于 `/* holiday-data:start */` 与 `/* holiday-data:end */` 之间,由脚本生成(该段请勿手改)
+  - `node desktop-plugin/build.mjs` 重新生成;`--check` 只校验是否一致(不一致退出 1)
+  - 生成器会展开日期区间、校验日期合法性/区间顺序/重复登记并提示跨年区间,再对结果做一次 ESM 语法检查,不通过则回滚 `plugin.js`
+  - 行为与 1.4.2 完全一致(2026 年 33 天),本次只改数据来源与维护方式
+
 ## [1.4.2] - 2026-09-20
 
 ### 新增

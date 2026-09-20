@@ -12,7 +12,7 @@ Hermes 桌面插件 —— DeepSeek 峰谷计价潮汐指示器(状态栏实时�
 - 颜色指示:高峰橙色 ⛰️ / 空闲绿色 🌙
 - **点击切换 Flash / Pro 价格**,标签前缀 `F` / `P` 标识当前档位,**选择会被记住**(重载插件、重启应用后保持)
 - **多语言** —— 界面文案提供简体中文 / 繁體中文 / English / 日本語 四套,随应用语言自动切换
-- **内置 2026 年法定节假日历** —— 节假日当天按空闲时段处理,倒计时自动指向下一个工作日(调休上班的周末仍算空闲,与官方「仅周一至周五为高峰」的规则一致)
+- **内置 2026 年法定节假日历**(数据在 `desktop-plugin/holidays.json`)—— 节假日当天按空闲时段处理,倒计时自动指向下一个工作日(调休上班的周末仍算空闲,与官方「仅周一至周五为高峰」的规则一致)
 - 悬停显示完整计价详情(北京时间、窗口规则、当前档位价格表)
 
 ## 峰谷规则
@@ -70,7 +70,31 @@ cp desktop-plugin/plugin.js ~/.hermes/desktop-plugins/deepseek-tide/
 
 ## 依赖
 
-无。纯前端本地时钟逻辑,不需要任何 API key 或网络连接。
+无。纯前端本地时钟逻辑,不需要任何 API key 或网络连接。(只有**改进节假日数据**时才需要 Node,见下节。)
+
+## 补充节假日数据
+
+节假日数据单独放在 **`desktop-plugin/holidays.json`**(来源:国务院办公厅假日安排通知),`plugin.js` 里那段 `HOLIDAYS` 是它生成出来的。
+
+Hermes 桌面插件必须是**单个自包含文件** —— 应用只读取文件夹里的 `plugin.js` 并用 blob URL 求值,相对的 `import './holidays.js'` 无法解析 —— 所以数据要「构建」进 `plugin.js`:
+
+```bash
+# 改完 holidays.json 后(需要 Node)
+node desktop-plugin/build.mjs           # 重新生成 plugin.js 中的节假日块
+node desktop-plugin/build.mjs --check   # 只校验是否一致(不一致退出码 1)
+```
+
+脚本会展开日期区间、校验日期合法性与重复项(并提示跨年区间),再对生成的 `plugin.js` 做一次 ESM 语法检查,不通过则回滚原文件。构建只改 `plugin.js`,应用会在文件变化后自动重载插件,不必手动 `Ctrl+K`。
+
+新增一年,往 `holidays.json` 的 `years` 里追加一条:
+
+```json
+{ "year": 2027, "source": "国办发明电〔2026〕N号", "holidays": [
+  { "name": "元旦", "from": "2027-01-01", "to": "2027-01-03" }
+] }
+```
+
+**只登记放假日。** 调休上班的周末按官方规则仍算空闲,不需要登记补班日;`source` 写明依据文件,方便日后核对。
 
 ## 实现说明
 
@@ -82,18 +106,18 @@ cp desktop-plugin/plugin.js ~/.hermes/desktop-plugins/deepseek-tide/
 | 区域注册 | `STATUSBAR_AREAS.right` 常量 |
 | 多语言 | `ctx.i18n.register({ en, zh, 'zh-hant', ja })` + `usePluginI18n(id)`,`en` 为兜底层 |
 | 偏好持久化 | `ctx.storage`(键自动命名空间化为 `hermes.plugin.deepseek-tide.*`) |
-| 节假日历 | `HOLIDAYS` 为内置的北京日期集合(2026 年 33 天,依据国办发明电〔2025〕7号);未收录的年份退回「仅周末空闲」 |
+| 节假日历 | 数据在 `desktop-plugin/holidays.json`,由 `build.mjs` 生成 `plugin.js` 中的 `HOLIDAYS`(2026 年 33 天,依据国办发明电〔2025〕7号);未收录的年份退回「仅周末空闲」 |
 | 依赖 | 仅 `@hermes/plugin-sdk` 与 `react` |
 
 价格常量位于 `plugin.js` 的 `PRICES`;官方调价时需同步更新常量,并在 `PRICE-HISTORY.md` 追加一期记录。
 
 ## 已知限制
 
-- 节假日历目前只收录 2026 年 —— 国务院一般于前一年 11 月公布次年安排,公布后需在 `plugin.js` 的 `HOLIDAYS` 中补入;未收录的年份按「仅周末空闲」处理
+- 节假日历需人工补充:`holidays.json` 目前只收录 2026 年 —— 国务院一般于前一年 11 月公布次年安排,公布后改 `holidays.json` 并运行 `node desktop-plugin/build.mjs`;未收录的年份按「仅周末空闲」处理
 - 价格为内置常量,不会自动联网更新(设计如此:零网络依赖)
 
 ## 许可
 
 [MIT](./LICENSE) © 2026 haexiao
 
-当前版本:**v1.4.2**(2026-09-20)
+当前版本:**v1.5.0**(2026-09-20)

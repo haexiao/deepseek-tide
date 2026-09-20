@@ -1,0 +1,3 @@
+# Scratch file the build script writes while syntax-checking the generated plugin.js
+# (deleted on success; kept out of git if a build dies mid-way).
+desktop-plugin/.plugin.build-check.mjs
