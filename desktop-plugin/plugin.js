@@ -6,7 +6,7 @@
  * Click the chip to toggle between Flash and Pro prices (choice persisted).
  *
  * Peak hours (Beijing time, Mon–Fri only): 09:00–12:00 and 14:00–18:00.
- * Weekends are off-peak all day; off-peak = half price.
+ * Weekends and China's statutory holidays are off-peak all day; off-peak = half price.
  * Prices in CNY per 1M tokens.
  *   Tiered billing since 2026-08-17; flash re-priced 2026-09-10 12:00.
  *   Full price schedule: PRICE-HISTORY.md in the repo.
@@ -41,11 +41,39 @@ const PEAK_WINDOWS = [
   [14 * 60, 18 * 60],
 ]
 
+// China's statutory holidays (Beijing dates) — off-peak all day even when they
+// fall on a weekday. 调休上班的周末 (make-up workdays) stay off-peak: DeepSeek's
+// rule counts Mon–Fri only.
+// 2026 list per 国办发明电〔2025〕7号 (国务院办公厅, 2025-11-04); years not listed
+// here fall back to the plain weekend-only rule — add the next year's list when
+// the State Council publishes it.
+const HOLIDAYS = new Set([
+  // 元旦 1/1–1/3
+  '2026-01-01', '2026-01-02', '2026-01-03',
+  // 春节 2/15–2/23
+  '2026-02-15', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19',
+  '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
+  // 清明节 4/4–4/6
+  '2026-04-04', '2026-04-05', '2026-04-06',
+  // 劳动节 5/1–5/5
+  '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05',
+  // 端午节 6/19–6/21
+  '2026-06-19', '2026-06-20', '2026-06-21',
+  // 中秋节 9/25–9/27
+  '2026-09-25', '2026-09-26', '2026-09-27',
+  // 国庆节 10/1–10/7
+  '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05',
+  '2026-10-06', '2026-10-07',
+])
+
 // Tier prices, CNY per 1M tokens.
-//   flash — re-priced 2026-09-10 12:00 (Beijing): off-peak ¥0.02 / ¥1 / ¥4,
-//           peak = 2× off-peak. Model name unchanged (deepseek-v4-flash).
-//   pro   — unchanged since 2026-08-17. Routed to V4.1 Flash (Flash pricing)
-//           from 2026-09-14 12:00 while V4 Pro is retired.
+//   flash — DeepSeek-V4.1-Flash, recommended model name `deepseek-flash`
+//           (legacy `deepseek-v4-flash` still routes here); re-priced
+//           2026-09-10 12:00 (Beijing): off-peak ¥0.02 / ¥1 / ¥4,
+//           peak = 2× off-peak.
+//   pro   — DeepSeek-V4-Pro, `deepseek-v4-pro`; unchanged since 2026-08-17,
+//           still served at Pro prices (the planned 2026-09-14 routing to
+//           V4.1-Flash was cancelled).
 const PRICES = {
   flash: {
     peak:    { hit: 0.04, miss: 2, out: 8 },
@@ -158,13 +186,21 @@ function beijingClock(now) {
   }
 }
 
-// Days (>= n) until the next workday after weekday `day` (0=Sun..6).
-function workdayOffset(day, n) {
-  for (let d = n; d <= 7; d++) {
-    const wd = (day + d) % 7
-    if (wd >= 1 && wd <= 5) return d
-  }
+// Days (>= n) until the next workday: a weekday that is not a holiday.
+function workdayOffset(now, n) {
+  for (let d = n; d <= n + 14; d++) if (!isOffDay(now, d)) return d
   return 7
+}
+
+// True when the Beijing calendar day `off` days from `now` is off-peak all
+// day — a weekend or a statutory holiday.
+function isOffDay(now, off) {
+  const bj = new Date(now.getTime() + BJ_OFFSET_MS + off * DAY_SECS * 1000)
+  const wd = bj.getUTCDay()
+  if (wd === 0 || wd === 6) return true
+  const mo = String(bj.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(bj.getUTCDate()).padStart(2, '0')
+  return HOLIDAYS.has(`${bj.getUTCFullYear()}-${mo}-${d}`)
 }
 
 // Returns { peak, nextIn, nextWindow, dayOffset, day }: nextIn (seconds) until
@@ -173,7 +209,7 @@ function workdayOffset(day, n) {
 // dayOffset is 0=window today, 1=tomorrow, N=in N days.
 function tideAt(now) {
   const { day, secs } = beijingClock(now)
-  const isWorkday = day >= 1 && day <= 5
+  const isWorkday = !isOffDay(now, 0)
 
   // Inside a peak window? (peak hours exist on workdays only)
   const cur = isWorkday
@@ -201,8 +237,9 @@ function tideAt(now) {
     nextWindow = PEAK_WINDOWS[1]
     dayOffset = 0
   } else {
-    // After 18:00 on a workday, or any time on a weekend → next workday 09:00.
-    const off = workdayOffset(day, 1)
+    // After 18:00 on a workday, or any time on a weekend/holiday → next
+    // workday 09:00.
+    const off = workdayOffset(now, 1)
     nextStart = DAY_SECS * off + PEAK_WINDOWS[0][0] * 60
     nextWindow = PEAK_WINDOWS[0]
     dayOffset = off
